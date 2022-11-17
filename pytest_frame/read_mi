@@ -1,0 +1,9 @@
+//主要库的安装
+pip install pytest
+pip install requests
+pip install yagmail
+pip install pymysql
+pip install selenium
+pip install browsermob-proxy
+pip install pytest-html
+pip install docx
