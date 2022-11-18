@@ -1,0 +1,9 @@
+打包命令
+pyinstaller -F xxx.py
+
+需安装库
+pip install selenium
+pip install pyinstaller
+
+chromedriver
+https://chromedriver.storage.googleapis.com/index.html

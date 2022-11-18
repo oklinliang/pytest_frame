@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>测试报告</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+/*
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);*/
+function add_collapse() {  // modify by linux超
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">显示详情</a> / ' +
+                            '<a href="javascript:hide_all_extras()">隐藏详情</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+	// 修改用例报告显示的用例名称 
+	// var case_name_td = document.getElementsByClassName("col-name");
+	// 	for(var i = 0; i < case_name_td.length; i++)
+	// 		try{
+	// 			case_name_td[i].innerText = case_name_td[i].innerText.split("\[")[1].split("\]")[0];
+	// 		}
+	// 		catch(err){
+	// 			// 如果表格中没有[]会抛异常，如果抛异常我就显示null，如果你想显示别的东西自己改吧，因为通常只要我们使用参数化就有[]显示
+	// 			case_name_td[i].innerText = "测试用例无参数化数据null";
+	// 		}
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>a.html</h1>
+    <p>生成报告时间24-May-2022 08:51:45 Pytest-Html版本：<a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>测试环境</h2>
+    <table id="environment">
+      <tr>
+        <td>接口地址</td>
+        <td>dev.tihal.cn:88</td></tr>
+      <tr>
+        <td>项目名称</td>
+        <td>电建系统接口自动化测试</td></tr></table>
+    <h2>用例统计</h2>
+    <p>所属部门: 鼎昊软件测试部门亮</p>
+    <p>测试人员: 帅气的亮</p>
+    <p>执行了90个测试用例, 历时:76.49秒 . </p>
+    <p class="filter" hidden="true">(取消)勾选复选框, 以便筛选测试结果</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">90 通过</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 跳过</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 失败</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 错误</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 预期失败</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 预期通过</span>
+    <h2>测试结果</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">通过/失败</th>
+          <th class="sortable" col="name">用例</th>
+          <th class="sortable numeric" col="duration">耗时</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="3">无测试结果, 试着选择其他测试结果条件</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_舆情预警_获取风险预警_种类统计</td>
+          <td class="col-duration">0.59</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_舆情预警_舆情列表</td>
+          <td class="col-duration">0.37</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_舆情预警_预警信息列表</td>
+          <td class="col-duration">0.31</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_舆情预警_风险预警_等级列表</td>
+          <td class="col-duration">0.58</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_舆情预警_安全周报</td>
+          <td class="col-duration">0.31</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急指挥_周边资源</td>
+          <td class="col-duration">0.15</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急指挥_获取国家_项目下拉框</td>
+          <td class="col-duration">0.21</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_法律法规_新法律法规接口</td>
+          <td class="col-duration">0.19</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_项目信息_获取区域alpha3</td>
+          <td class="col-duration">0.27</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_项目信息_左侧树搜索</td>
+          <td class="col-duration">5.31</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_项目信息_员工数_项目数统计</td>
+          <td class="col-duration">0.58</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_项目信息_左侧树</td>
+          <td class="col-duration">0.47</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_项目信息_安保信息</td>
+          <td class="col-duration">0.25</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_地球_预警分布_v2</td>
+          <td class="col-duration">0.53</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_地球_预警等级</td>
+          <td class="col-duration">5.71</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_地球_着色</td>
+          <td class="col-duration">0.22</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_地球_预警类别</td>
+          <td class="col-duration">2.54</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_地球_根据国家code获取国别信息</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_地球_获取国家边界线</td>
+          <td class="col-duration">0.21</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_地球_项目点</td>
+          <td class="col-duration">0.47</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_项目_投资_机构列表</td>
+          <td class="col-duration">0.36</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_获取未更新的项目列表</td>
+          <td class="col-duration">0.48</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_人员统计</td>
+          <td class="col-duration">0.22</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_境外防疫物资动态</td>
+          <td class="col-duration">0.29</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_项目_投资_机构统计信息</td>
+          <td class="col-duration">0.49</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_中间统计数</td>
+          <td class="col-duration">0.32</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_获取药品未满足的项目</td>
+          <td class="col-duration">0.31</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_项目_投资_机构统计信息更多</td>
+          <td class="col-duration">0.50</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_境外防疫物资动更多</td>
+          <td class="col-duration">0.47</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_全球疫情趋势图</td>
+          <td class="col-duration">0.14</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_获取区域国家</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_人员统计信息更多</td>
+          <td class="col-duration">0.26</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_新闻列表</td>
+          <td class="col-duration">0.17</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_全球疫情数据</td>
+          <td class="col-duration">0.19</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_境外防疫物资动态_拆分柱状图</td>
+          <td class="col-duration">0.38</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_新闻详情</td>
+          <td class="col-duration">0.15</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_确诊_累计_疫苗接种分布</td>
+          <td class="col-duration">0.14</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_获取区域总部列表</td>
+          <td class="col-duration">0.24</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_地图获取区域点</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_疫情管理_全球疫情动态</td>
+          <td class="col-duration">5.14</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_预案管理_新_预案管理</td>
+          <td class="col-duration">0.15</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_国别风险_国别信息列表</td>
+          <td class="col-duration">0.20</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_国别风险_预警着色</td>
+          <td class="col-duration">0.73</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_国别风险_区域下拉框</td>
+          <td class="col-duration">0.23</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_国别风险_列表</td>
+          <td class="col-duration">0.44</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_国别风险_国别风险类型v2</td>
+          <td class="col-duration">0.15</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急资源_应急装备</td>
+          <td class="col-duration">0.17</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急资源_新_应急组织</td>
+          <td class="col-duration">5.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急资源_应急物资</td>
+          <td class="col-duration">5.07</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急资源_应急组织</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_位置共享_获取单个用户轨迹</td>
+          <td class="col-duration">0.39</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_位置共享_组织结构列表</td>
+          <td class="col-duration">0.27</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_位置共享_获取轨迹</td>
+          <td class="col-duration">0.26</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_位置共享_位置共享中途加人</td>
+          <td class="col-duration">0.37</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_位置共享_创建位置共享</td>
+          <td class="col-duration">0.32</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_位置共享_位置共享结束</td>
+          <td class="col-duration">0.15</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急演练_演练结束</td>
+          <td class="col-duration">0.15</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急演练_开始获取详情</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急演练_获取统计柱状图</td>
+          <td class="col-duration">0.17</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急演练_演练方案记录详情</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急演练_开始与结束列表</td>
+          <td class="col-duration">5.23</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急演练_演练记录评估方案保存</td>
+          <td class="col-duration">5.18</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急演练_演练开始</td>
+          <td class="col-duration">0.20</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_IM_通讯录组织_一层一层获取</td>
+          <td class="col-duration">0.24</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_IM_通讯录组织_加入群聊</td>
+          <td class="col-duration">0.18</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_IM_通讯录组织_删除群聊用户</td>
+          <td class="col-duration">0.14</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_IM_通过房间id加入房间</td>
+          <td class="col-duration">0.15</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_IM_获取群成员</td>
+          <td class="col-duration">5.17</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_IM_创建群聊</td>
+          <td class="col-duration">0.17</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_IM_通讯录搜索</td>
+          <td class="col-duration">0.22</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_IM_通讯录列表_整个组织机构</td>
+          <td class="col-duration">0.19</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_值班记录_列表</td>
+          <td class="col-duration">0.19</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_值班记录_详情</td>
+          <td class="col-duration">0.19</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_值班记录_获取报警记录</td>
+          <td class="col-duration">0.18</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_值班记录_保存</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_视频监控_项目列表</td>
+          <td class="col-duration">0.23</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_视频监控_获取视频</td>
+          <td class="col-duration">0.29</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_视频监控_添加摄像头配置</td>
+          <td class="col-duration">0.15</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_文件管理_获取文件树</td>
+          <td class="col-duration">0.13</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_文件管理_列表</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_文件管理_添加文件</td>
+          <td class="col-duration">5.17</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_文件管理_创建文件夹</td>
+          <td class="col-duration">0.17</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_培训_列表搜索</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_培训_列表</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急指挥_周边资源类型</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急指挥_人工报警列表</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急指挥_app报警列表</td>
+          <td class="col-duration">0.31</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急指挥_人员类型</td>
+          <td class="col-duration">0.16</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急指挥_事故事件发生地_树状结构</td>
+          <td class="col-duration">0.45</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">lin_lessee.py::Test_指挥中心_舆情预警::test_应急指挥_接警处置记录</td>
+          <td class="col-duration">0.29</td></tr>
+        <tr>
+          <td class="extra" colspan="3">
+            <div class="empty log">未捕获到日志.</div></td></tr></tbody></table></body></html>
